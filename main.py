@@ -13,13 +13,13 @@ st.set_page_config(
     page_icon=":robot_face:",
     layout="wide",
     initial_sidebar_state="expanded"
+
 )
 
 
 
 # Função para a página de Notícias
 def Coleta_Dados():
-
 
     # Layout
     col1, col2, col3, col4 = st.columns(4)
@@ -29,6 +29,14 @@ def Coleta_Dados():
     Noticia3 = col4.empty()  # Resultado da aposta anterior
 
     ganho_hora = st.empty()
+
+    # Expander para o DataFrame
+    with st.expander("Exibir DataFrame"):
+        df_expander = st.empty()
+
+    # Expander para o restante do código
+    with st.expander("Configurações e Log"):
+        log_expander = st.empty()
 
     # Classe do Scraper
     class CanalTechScraper:
@@ -86,13 +94,14 @@ def Coleta_Dados():
             conn = sqlite3.connect(self.db_file)
             cursor = conn.cursor()
 
-            link_site = data[2]
+            try:
+                link_site = data[2]
 
-            # Verifica se o link já existe no banco de dados
-            cursor.execute('SELECT COUNT(*) FROM canaltech WHERE link_site = ?', (link_site,))
-            count = cursor.fetchone()[0]
+                # Verifica se o link já existe no banco de dados
+                if self.check_duplicate(link_site):
+                    log_expander.write(f"O link já existe no banco de dados: {link_site}")
+                    return f"O link já existe no banco de dados: {link_site}"
 
-            if count == 0:
                 # Se o link não existir, então podemos inseri-lo
                 cursor.execute('''
                     INSERT INTO canaltech (
@@ -103,13 +112,15 @@ def Coleta_Dados():
                 ''', data)
 
                 conn.commit()
+                log_expander.write(f"Registro inserido com sucesso para o link: {link_site}")
                 return f"Registro inserido com sucesso para o link: {link_site}"
-            else:
-                return f"O link já existe no banco de dados: {link_site}"
 
-            conn.close()
+            except Exception as e:
+                log_expander.write(f"Erro ao inserir dados: {str(e)}")
 
-
+            finally:
+                # Garante que o fechamento da conexão ocorra mesmo se houver uma exceção
+                conn.close()
     fontes_urls = {
         "mais-lidas": "https://canaltech.com.br/mais-lidas/",
         "smartphone": "https://canaltech.com.br/smartphone/",
@@ -133,9 +144,15 @@ def Coleta_Dados():
         # Conectar ao banco de dados
         canaltech_scraper = CanalTechScraper("Noticias.db")
 
+        # Campo de entrada para o intervalo de tempo (em segundos)
+        intervalo_tempo = st.number_input("Intervalo de tempo entre raspagens (segundos)", value=30)
+
+        # Definir as colunas desejadas e permitir a renomeação
+        colunas = st.multiselect("Selecione as colunas desejadas", ["titulo", "categoria", "link_site", "data", "conteudo"])
+
         # Botão para iniciar o scraper
-        if st.button("Iniciar Scraper"):
-            st.write("Botão pressionado!")  # Adiciona um log indicando que o botão foi pressionado
+        if st.button("Realizar Raspagem"):
+            log_expander.write("Raspagem em andamento!")  # Adiciona um log indicando que a raspagem está em andamento
 
             # Cria uma lista vazia para armazenar os dados
             data_list = []
@@ -147,7 +164,6 @@ def Coleta_Dados():
                     response = requests.get(url)
 
                     if response.status_code == 200:
-
                         soup = BeautifulSoup(response.content, 'html.parser')
 
                         articles = soup.find_all('article', class_='c-fbeGQw')
@@ -178,29 +194,34 @@ def Coleta_Dados():
                                     continue
                                 textos_acumulados.append(texto)
 
+                            # Seleciona apenas as colunas desejadas
                             data = (
-                                title, "\n".join(textos_acumulados), link, "N/A", "N/A", category, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
+                                title, category, link, data_value, "\n".join(textos_acumulados)
                             )
 
+                            # Renomeia as colunas conforme especificado pelo usuário
+                            data_dict = {col: val for col, val in zip(["titulo", "categoria", "link_site", "data", "conteudo"], data)}
+
                             # Verifica se já existe no banco de dados
-                            result = canaltech_scraper.check_duplicate(link)
+                            result = canaltech_scraper.insert_data(tuple(data_dict.values()))
+
+                            # Aguarda o intervalo de tempo especificado antes de realizar a próxima raspagem
+                            time.sleep(intervalo_tempo)
 
                             # Adiciona dados à lista
-                            data_list.append({col: val for col, val in zip(canaltech_scraper.get_column_names(), data)})
+                            data_list.append(data_dict)
 
                             # Atualiza o DataFrame e exibe em tempo real
-                            df = pd.DataFrame(data_list)
-                            #Twiter_postado.text(f"Dica: {df['titulo'].iloc[-1]}")
-                            #Noticia.text(f"Derrotas: {df['categoria'].iloc[-1]}")
-                            #Noticia2.text(f"Vitorias: {df['link_site'].iloc[-1]}")
-                            #Noticia3.text(f"Rodadas: {df['url_imagem'].iloc[-1]}")
+                            df = pd.DataFrame(data_list, columns=colunas)
+                            df_expander.dataframe(df)
 
-                            ganho_hora.dataframe(df)
-
+            # Limpa a barra de progresso no final da raspagem
+            log_expander.write("Raspagem concluída!")
 
     # Executa o Streamlit
     if __name__ == "__main__":
         main()
+
     
 
 # Função para a página de Dados
@@ -398,7 +419,6 @@ def bot_final_page():
                     rest_id = response_data['data'].get('create_tweet', {}).get('tweet_results', {}).get('result', {}).get('rest_id', '')
 
                     print(f"rest_id: {rest_id}")
-       
 
                     json_data_resposta = {
                         'variables': {
@@ -446,11 +466,12 @@ def bot_final_page():
                         headers=headers,
                         json=json_data_resposta,
                     )
-             # Atualizar a coluna 'xtwiter' no banco de dados
+                    # Atualizar a coluna 'xtwiter' no banco de dados
                     cursor.execute('UPDATE canaltech SET xtwiter = ? WHERE url_imagem = ?', ('Twitter postado', noticia[0]))
                     conn.commit()
                 else:
                     print("Erro ao extrair tweets da resposta do modelo. Pulando para a próxima notícia.")
+
         # Fechar a conexão com o banco de dados
         conn.close()
 
@@ -471,13 +492,13 @@ def bot_final_page():
 
 
 pages = {
-    "Upload de dados": Coleta_Dados,
-    "Atualizar plataforma": bot_final_page  
+    "Coletar noticias 📰": Coleta_Dados,
+    "Postar Noticias 🐦": bot_final_page  
 
 }
 
-# Barra de navegação com as tabs
-selected_page = st.sidebar.radio("Selecione uma página", list(pages.keys()))
+expander = st.sidebar.expander("Selecione uma página")
+selected_page = expander.radio("Página", list(pages.keys()))
 
 # Exibir a página selecionada
 pages[selected_page]()
