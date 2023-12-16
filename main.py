@@ -13,7 +13,6 @@ st.set_page_config(
     page_icon=":robot_face:",
     layout="wide",
     initial_sidebar_state="expanded"
-
 )
 
 
@@ -418,7 +417,7 @@ def bot_final_page():
                     # Acesse 'rest_id' se estiver presente
                     rest_id = response_data['data'].get('create_tweet', {}).get('tweet_results', {}).get('result', {}).get('rest_id', '')
 
-                    print(f"rest_id: {rest_id}")
+                    #print(f"rest_id: {rest_id}")
 
                     json_data_resposta = {
                         'variables': {
@@ -470,7 +469,7 @@ def bot_final_page():
                     cursor.execute('UPDATE canaltech SET xtwiter = ? WHERE url_imagem = ?', ('Twitter postado', noticia[0]))
                     conn.commit()
                 else:
-                    print("Erro ao extrair tweets da resposta do modelo. Pulando para a próxima notícia.")
+                    st.toast("Erro ao extrair tweets da resposta do modelo. Pulando para a próxima notícia.")
 
         # Fechar a conexão com o banco de dados
         conn.close()
@@ -492,17 +491,15 @@ def bot_final_page():
 
 
 pages = {
-    "Coletar noticias 📰": Coleta_Dados,
-    "Postar Noticias 🐦": bot_final_page  
+    "Upload de dados": Coleta_Dados,
+    "Atualizar plataforma": bot_final_page  
 
 }
 
-expander = st.sidebar.expander("Selecione uma página")
-selected_page = expander.radio("Página", list(pages.keys()))
+# Barra de navegação com as tabs
+selected_page = st.sidebar.radio("Selecione uma página", list(pages.keys()))
 
 # Exibir a página selecionada
 pages[selected_page]()
-
-
 
 
