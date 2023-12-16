@@ -13,7 +13,6 @@ st.set_page_config(
     page_icon=":robot_face:",
     layout="wide",
     initial_sidebar_state="expanded"
-
 )
 
 
@@ -148,7 +147,11 @@ def Coleta_Dados():
         intervalo_tempo = st.number_input("Intervalo de tempo entre raspagens (segundos)", value=30)
 
         # Definir as colunas desejadas e permitir a renomeação
-        colunas = st.multiselect("Selecione as colunas desejadas", ["titulo", "categoria", "link_site", "data", "conteudo"])
+        # Obtém todas as colunas presentes no banco de dados
+        colunas_disponiveis = canaltech_scraper.get_column_names()
+
+        # Definir as colunas desejadas e permitir a renomeação
+        colunas_selecionadas = st.multiselect("Selecione as colunas desejadas", colunas_disponiveis)
 
         # Botão para iniciar o scraper
         if st.button("Realizar Raspagem"):
@@ -194,13 +197,14 @@ def Coleta_Dados():
                                     continue
                                 textos_acumulados.append(texto)
 
-                            # Seleciona apenas as colunas desejadas
                             data = (
-                                title, category, link, data_value, "\n".join(textos_acumulados)
+                                title, category, link, "N/A", data_value, "\n".join(textos_acumulados),
+                                "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"
                             )
-
                             # Renomeia as colunas conforme especificado pelo usuário
-                            data_dict = {col: val for col, val in zip(["titulo", "categoria", "link_site", "data", "conteudo"], data)}
+                            data_dict = {col: val for col, val in zip(
+                                ["titulo", "categoria", "link_site", "creditos", "data", "url_imagem", "xtwiter", "instagram", "facebook",
+                                "threads", "vazio1", "vazio2", "vazio3", "vazio4"], data)}
 
                             # Verifica se já existe no banco de dados
                             result = canaltech_scraper.insert_data(tuple(data_dict.values()))
@@ -211,9 +215,11 @@ def Coleta_Dados():
                             # Adiciona dados à lista
                             data_list.append(data_dict)
 
+
+
                             # Atualiza o DataFrame e exibe em tempo real
-                            df = pd.DataFrame(data_list, columns=colunas)
-                            df_expander.dataframe(df)
+                            df = pd.DataFrame(data_list, columns=colunas_disponiveis)
+                            df_expander.dataframe(df[colunas_selecionadas])  # Mostra apenas as colunas selecionadas pelo usuário
 
             # Limpa a barra de progresso no final da raspagem
             log_expander.write("Raspagem concluída!")
@@ -226,6 +232,8 @@ def Coleta_Dados():
 
 # Função para a página de Dados
 def bot_final_page():
+
+
     postagem = st.empty()
 
 
@@ -492,18 +500,17 @@ def bot_final_page():
 
 
 pages = {
-    "Coletar noticias 📰": Coleta_Dados,
-    "Postar Noticias 🐦": bot_final_page
+    "Upload de dados": Coleta_Dados,
+    "Atualizar plataforma": bot_final_page  
+
 }
 
-expander = st.sidebar.expander("Selecione uma página")
-selected_page = expander.radio("Página", list(pages.keys()))
+# Barra de navegação com as tabs
+selected_page = st.sidebar.radio("Selecione uma página", list(pages.keys()))
 
-# Verificar se a página selecionada existe no dicionário antes de chamar a função
-if selected_page in pages:
-    # Chamar a função associada à página selecionada
-    pages[selected_page]()
-else:
-    st.sidebar.error("Página não encontrada. Selecione uma página válida.")
+# Exibir a página selecionada
+pages[selected_page]()
+
+
 
 
