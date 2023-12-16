@@ -2,4 +2,4 @@ datetime
 google-generativeai
 requests
 pandas
-BeautifulSoup
+beautifulsoup4==4.10.0
