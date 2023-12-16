@@ -3,6 +3,5 @@ time
 sqlite3
 google
 requests
-streamlit
 beautifulsoup4
 pandas
